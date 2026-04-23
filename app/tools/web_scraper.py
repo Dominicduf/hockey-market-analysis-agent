@@ -9,12 +9,12 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).parent.parent.parent / "data" / "products"
 
 PRODUCT_CATALOG: dict[str, dict[str, str]] = {
-    "bauer_supreme_stick":  {"file": "bauer_supreme_stick.html",  "category": "Hockey Sticks"},
+    "bauer_supreme_stick": {"file": "bauer_supreme_stick.html", "category": "Hockey Sticks"},
     "warrior_covert_stick": {"file": "warrior_covert_stick.html", "category": "Hockey Sticks"},
-    "ccm_tacks_skates":     {"file": "ccm_tacks_skates.html",     "category": "Ice Skates"},
-    "bauer_reakt_helmet":   {"file": "bauer_reakt_helmet.html",   "category": "Helmets"},
-    "ccm_ht_gloves":        {"file": "ccm_ht_gloves.html",        "category": "Hockey Gloves"},
-    "bauer_vapor_shin_pads":{"file": "bauer_vapor_shin_pads.html","category": "Shin Pads"},
+    "ccm_tacks_skates": {"file": "ccm_tacks_skates.html", "category": "Ice Skates"},
+    "bauer_reakt_helmet": {"file": "bauer_reakt_helmet.html", "category": "Helmets"},
+    "ccm_ht_gloves": {"file": "ccm_ht_gloves.html", "category": "Hockey Gloves"},
+    "bauer_vapor_shin_pads": {"file": "bauer_vapor_shin_pads.html", "category": "Shin Pads"},
 }
 
 # Flat mapping kept for internal file lookups
@@ -76,7 +76,9 @@ def scrape_product_pages(product_ids: list[str]) -> str:
     Returns:
         Markdown formatted product data for each product, separated by dividers.
     """
-    logger.info("[TOOL] scrape_product_pages called with %d product(s): %s", len(product_ids), product_ids)
+    logger.info(
+        "[TOOL] scrape_product_pages called with %d product(s): %s", len(product_ids), product_ids
+    )
 
     results = []
     for product_id in product_ids:

@@ -26,9 +26,7 @@ async def health():
 @app.post("/analyze", response_model=QueryResponse)
 async def analyze(request: QueryRequest):
     try:
-        result = await agent.ainvoke(
-            {"messages": [{"role": "user", "content": request.query}]}
-        )
+        result = await agent.ainvoke({"messages": [{"role": "user", "content": request.query}]})
         return QueryResponse(response=result["messages"][-1].content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

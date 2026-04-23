@@ -10,3 +10,20 @@ dependencies = [
     "pydantic-settings==2.9.1",
     "beautifulsoup4==4.13.4",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0.0",
+    "ruff>=0.9.0",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+exclude = ["app/prompts.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

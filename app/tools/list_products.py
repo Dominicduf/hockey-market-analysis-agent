@@ -46,5 +46,7 @@ def list_products(categories: list[str] = []) -> str:
         lines.append("")
 
     result = "\n".join(lines).strip()
-    logger.info("[TOOL] list_products returned %d product(s)", sum(len(v) for v in grouped.values()))
+    logger.info(
+        "[TOOL] list_products returned %d product(s)", sum(len(v) for v in grouped.values())
+    )
     return result

@@ -5,8 +5,8 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
 from app.config import settings
-from app.schemas import SentimentResult
 from app.prompts import SENTIMENT_PROMPT
+from app.schemas import SentimentResult
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +36,12 @@ def analyze_sentiment(scraped_data: str) -> str:
 
     try:
         structured_llm = llm.with_structured_output(SentimentResult)
-        result: SentimentResult = structured_llm.invoke([
-            SystemMessage(content=SENTIMENT_PROMPT),
-            {"role": "user", "content": f"Analyze this product:\n\n{scraped_data}"},
-        ])
+        result: SentimentResult = structured_llm.invoke(
+            [
+                SystemMessage(content=SENTIMENT_PROMPT),
+                {"role": "user", "content": f"Analyze this product:\n\n{scraped_data}"},
+            ]
+        )
 
         logger.info("[TOOL] Successfully analyzed sentiment for '%s'", result.product_name)
         return result.model_dump_json()

@@ -1,9 +1,9 @@
 import logging
 from typing import Literal
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage, trim_messages
+from langchain_core.messages import AIMessage, SystemMessage, trim_messages
 from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
 
@@ -39,10 +39,12 @@ def build_agent():
     def guardrail(state: AgentState):
         user_message = state["messages"][-1].content
         logger.info("[GUARDRAIL] Classifying input: '%s'", user_message[:80])
-        response = llm.invoke([
-            SystemMessage(content=GUARDRAIL_PROMPT),
-            {"role": "user", "content": user_message},
-        ])
+        response = llm.invoke(
+            [
+                SystemMessage(content=GUARDRAIL_PROMPT),
+                {"role": "user", "content": user_message},
+            ]
+        )
         is_safe = response.content.strip().upper() == "SAFE"
         logger.info("[GUARDRAIL] Classification result: %s", "SAFE" if is_safe else "UNSAFE")
 
@@ -85,7 +87,9 @@ def build_agent():
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + trimmed
 
         analysis_done = has_called_tool(state["messages"], "analyze_sentiment")
-        llm_to_use = llm_with_tools if analysis_done else llm_with_tools.bind(tool_choice="required")
+        llm_to_use = (
+            llm_with_tools if analysis_done else llm_with_tools.bind(tool_choice="required")
+        )
 
         response = llm_to_use.invoke(messages)
         if response.tool_calls:
