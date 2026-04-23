@@ -6,6 +6,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
+from openai import APIConnectionError, APITimeoutError, RateLimitError
 
 from app.config import settings
 from app.prompts import GUARDRAIL_PROMPT, SYSTEM_PROMPT
@@ -27,13 +28,25 @@ class AgentState(MessagesState):
     is_safe: bool
 
 
+RETRY_EXCEPTIONS = (RateLimitError, APIConnectionError, APITimeoutError)
+
+
 def build_agent():
-    llm = ChatOpenAI(
+    llm_base = ChatOpenAI(
         base_url=settings.openrouter_base_url,
         api_key=settings.openrouter_api_key,
         model=settings.model_name,
     )
-    llm_with_tools = llm.bind_tools(tools)
+    llm = llm_base.with_retry(
+        retry_if_exception_type=RETRY_EXCEPTIONS,
+        wait_exponential_jitter=True,
+        stop_after_attempt=settings.max_retries,
+    )
+    llm_with_tools = llm_base.bind_tools(tools).with_retry(
+        retry_if_exception_type=RETRY_EXCEPTIONS,
+        wait_exponential_jitter=True,
+        stop_after_attempt=settings.max_retries,
+    )
 
     logger = logging.getLogger(__name__)
 
@@ -88,9 +101,18 @@ def build_agent():
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + trimmed
 
         analysis_done = has_called_tool(state["messages"], "generate_report")
-        llm_to_use = (
-            llm_with_tools if analysis_done else llm_with_tools.bind(tool_choice="required")
-        )
+        if analysis_done:
+            llm_to_use = llm_with_tools
+        else:
+            llm_to_use = (
+                llm_base.bind_tools(tools)
+                .bind(tool_choice="required")
+                .with_retry(
+                    retry_if_exception_type=RETRY_EXCEPTIONS,
+                    wait_exponential_jitter=True,
+                    stop_after_attempt=settings.max_retries,
+                )
+            )
 
         response = llm_to_use.invoke(messages)
         if response.tool_calls:
