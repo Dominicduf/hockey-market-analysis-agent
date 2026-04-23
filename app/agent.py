@@ -1,7 +1,7 @@
 import logging
 from typing import Literal
 
-from langchain_core.messages import AIMessage, SystemMessage, trim_messages
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage, trim_messages
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState
@@ -75,6 +75,19 @@ def build_agent():
             return "call_llm"
         return END
 
+    def count_completed_tool_calls(messages: list, tool_name: str) -> int:
+        """Count completed ToolMessage results for a given tool name."""
+        return sum(1 for m in messages if isinstance(m, ToolMessage) and m.name == tool_name)
+
+    def get_scraped_product_count(messages: list) -> int:
+        """Return the number of product_ids from the most recent scrape_product_pages call."""
+        for m in reversed(messages):
+            if hasattr(m, "tool_calls"):
+                for tc in m.tool_calls:
+                    if tc["name"] == "scrape_product_pages":
+                        return len(tc["args"].get("product_ids", []))
+        return 0
+
     def has_called_tool(messages: list, tool_name: str) -> bool:
         return any(
             tc["name"] == tool_name
@@ -100,18 +113,34 @@ def build_agent():
             )
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + trimmed
 
-        analysis_done = has_called_tool(state["messages"], "generate_report")
-        if analysis_done:
+        sentiments_done = count_completed_tool_calls(state["messages"], "analyze_sentiment")
+        products_to_analyze = get_scraped_product_count(state["messages"])
+        all_sentiment_done = products_to_analyze > 0 and sentiments_done >= products_to_analyze
+        has_report = has_called_tool(state["messages"], "generate_report")
+
+        logger.debug(
+            "[AGENT] sentiments_done=%d / products_to_analyze=%d | has_report=%s",
+            sentiments_done,
+            products_to_analyze,
+            has_report,
+        )
+
+        if has_report:
             llm_to_use = llm_with_tools
+        elif all_sentiment_done:
+            # All products analyzed — force generate_report by making it the ONLY available tool.
+            # Using tool_choice="required" + a single tool is more reliable than specific-name
+            # forcing, which many providers silently ignore.
+            llm_to_use = llm_base.bind_tools([generate_report], tool_choice="required").with_retry(
+                retry_if_exception_type=RETRY_EXCEPTIONS,
+                wait_exponential_jitter=True,
+                stop_after_attempt=settings.max_retries,
+            )
         else:
-            llm_to_use = (
-                llm_base.bind_tools(tools)
-                .bind(tool_choice="required")
-                .with_retry(
-                    retry_if_exception_type=RETRY_EXCEPTIONS,
-                    wait_exponential_jitter=True,
-                    stop_after_attempt=settings.max_retries,
-                )
+            llm_to_use = llm_base.bind_tools(tools, tool_choice="required").with_retry(
+                retry_if_exception_type=RETRY_EXCEPTIONS,
+                wait_exponential_jitter=True,
+                stop_after_attempt=settings.max_retries,
             )
 
         response = llm_to_use.invoke(messages)

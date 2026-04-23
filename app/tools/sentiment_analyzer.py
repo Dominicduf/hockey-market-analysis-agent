@@ -12,16 +12,10 @@ from app.schemas import SentimentResult
 
 logger = logging.getLogger(__name__)
 
-_llm = ChatOpenAI(
+llm = ChatOpenAI(
     base_url=settings.openrouter_base_url,
     api_key=settings.openrouter_api_key,
     model=settings.model_name,
-)
-
-llm = _llm.with_retry(
-    retry_if_exception_type=(RateLimitError, APIConnectionError, APITimeoutError),
-    wait_exponential_jitter=True,
-    stop_after_attempt=settings.max_retries,
 )
 
 
@@ -47,7 +41,11 @@ def analyze_sentiment(scraped_data: str) -> str:
             SystemMessage(content=SENTIMENT_PROMPT),
             {"role": "user", "content": f"Analyze this product:\n\n{scraped_data}"},
         ]
-        structured_llm = llm.with_structured_output(SentimentResult)
+        structured_llm = llm.with_structured_output(SentimentResult).with_retry(
+            retry_if_exception_type=(RateLimitError, APIConnectionError, APITimeoutError),
+            wait_exponential_jitter=True,
+            stop_after_attempt=settings.max_retries,
+        )
 
         result = None
         for attempt in range(2):

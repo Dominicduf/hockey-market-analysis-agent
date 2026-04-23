@@ -141,6 +141,17 @@
       font-size: 0.9rem;
       display: none;
     }
+
+    .message {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: #fef9e7;
+      border: 1.5px solid #f39c12;
+      border-radius: 8px;
+      color: #7d6608;
+      font-size: 0.9rem;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -153,6 +164,7 @@
 
     <div class="spinner" id="spinner">⏳ Analyzing... this may take a minute.</div>
     <div class="error" id="error"></div>
+    <div class="message" id="message"></div>
 
     <div class="download-banner" id="downloadBanner">
       <span>📄 Report ready</span>
@@ -172,10 +184,12 @@
       const error = document.getElementById("error");
       const downloadBanner = document.getElementById("downloadBanner");
       const downloadBtn = document.getElementById("downloadBtn");
+      const message = document.getElementById("message");
 
       btn.disabled = true;
       spinner.style.display = "block";
       error.style.display = "none";
+      message.style.display = "none";
       downloadBanner.style.display = "none";
 
       try {
@@ -197,6 +211,9 @@
           const filename = match[0];
           downloadBtn.onclick = () => window.location.href = `/reports/${filename}`;
           downloadBanner.style.display = "flex";
+        } else {
+          message.textContent = data.response;
+          message.style.display = "block";
         }
 
       } catch (err) {
