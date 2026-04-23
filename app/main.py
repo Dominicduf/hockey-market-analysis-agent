@@ -1,21 +1,21 @@
+import logging
+
 from fastapi import FastAPI, HTTPException
 
 from app.agent import agent
 from app.schemas import QueryRequest, QueryResponse
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 app = FastAPI(
     title="Market Analysis Agent",
     description="AI-powered market analysis using LangGraph and OpenRouter",
     version="0.1.0",
 )
-
-
-class QueryRequest(BaseModel):
-    query: str
-
-
-class QueryResponse(BaseModel):
-    response: str
 
 
 @app.get("/health")
