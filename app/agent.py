@@ -9,9 +9,11 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 from app.config import settings
 from app.prompts import GUARDRAIL_PROMPT, SYSTEM_PROMPT
-from app.tools.web_scraper import scrape_product_page
+from app.tools.list_products import list_products
+from app.tools.sentiment_analyzer import analyze_sentiment
+from app.tools.web_scraper import scrape_product_pages
 
-tools = [scrape_product_page]
+tools = [list_products, scrape_product_pages, analyze_sentiment]
 
 REFUSAL_MESSAGE = (
     "I'm a hockey equipment market analyst and I can only help with queries related "
@@ -57,19 +59,27 @@ def build_agent():
             return "call_llm"
         return END
 
+    def has_called_tool(messages: list, tool_name: str) -> bool:
+        return any(
+            tc["name"] == tool_name
+            for m in messages
+            if hasattr(m, "tool_calls")
+            for tc in m.tool_calls
+        )
+
     def call_llm(state: AgentState):
         logger.info("[AGENT] Calling LLM...")
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
 
-        has_tool_results = any(isinstance(m, ToolMessage) for m in state["messages"])
-        llm_to_use = llm_with_tools if has_tool_results else llm_with_tools.bind(tool_choice="required")
+        analysis_done = has_called_tool(state["messages"], "analyze_sentiment")
+        llm_to_use = llm_with_tools if analysis_done else llm_with_tools.bind(tool_choice="required")
 
         response = llm_to_use.invoke(messages)
         if response.tool_calls:
-            tool_names = [tc["name"] for tc in response.tool_calls]
-            logger.info("[AGENT] LLM requested tools: %s", tool_names)
+            for tc in response.tool_calls:
+                logger.info("[AGENT] Tool call: %s | Args: %s", tc["name"], tc["args"])
         else:
-            logger.info("[AGENT] LLM generated final response")
+            logger.info("[AGENT] Final response:\n%s", response.content)
         return {"messages": [response]}
 
     graph = StateGraph(AgentState)

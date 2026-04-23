@@ -6,16 +6,19 @@ from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(__file__).parent.parent.parent / "mock_data" / "products"
+DATA_DIR = Path(__file__).parent.parent.parent / "data" / "products"
 
-AVAILABLE_PRODUCTS = {
-    "bauer_supreme_stick": "bauer_supreme_stick.html",
-    "warrior_covert_stick": "warrior_covert_stick.html",
-    "ccm_tacks_skates": "ccm_tacks_skates.html",
-    "bauer_reakt_helmet": "bauer_reakt_helmet.html",
-    "ccm_ht_gloves": "ccm_ht_gloves.html",
-    "bauer_vapor_shin_pads": "bauer_vapor_shin_pads.html",
+PRODUCT_CATALOG: dict[str, dict[str, str]] = {
+    "bauer_supreme_stick":  {"file": "bauer_supreme_stick.html",  "category": "Hockey Sticks"},
+    "warrior_covert_stick": {"file": "warrior_covert_stick.html", "category": "Hockey Sticks"},
+    "ccm_tacks_skates":     {"file": "ccm_tacks_skates.html",     "category": "Ice Skates"},
+    "bauer_reakt_helmet":   {"file": "bauer_reakt_helmet.html",   "category": "Helmets"},
+    "ccm_ht_gloves":        {"file": "ccm_ht_gloves.html",        "category": "Hockey Gloves"},
+    "bauer_vapor_shin_pads":{"file": "bauer_vapor_shin_pads.html","category": "Shin Pads"},
 }
+
+# Flat mapping kept for internal file lookups
+AVAILABLE_PRODUCTS = {pid: info["file"] for pid, info in PRODUCT_CATALOG.items()}
 
 
 def parse_product_page(html: str) -> str:
@@ -33,6 +36,7 @@ def parse_product_page(html: str) -> str:
     for review in soup.select(".review"):
         rating_el = review.select_one(".review-rating")
         author_el = review.select_one(".review-author")
+        date_el = review.select_one(".review-date")
         text_el = review.select_one(".review-text")
         if text_el:
             line = f'- "{text_el.get_text(strip=True)}"'
@@ -40,6 +44,8 @@ def parse_product_page(html: str) -> str:
                 line += f" — {author_el.get_text(strip=True)}"
             if rating_el:
                 line += f" {rating_el.get_text(strip=True)}★"
+            if date_el:
+                line += f" ({date_el.get_text(strip=True)})"
             reviews.append(line)
 
     md = f"## {name}\n"
@@ -58,39 +64,40 @@ def parse_product_page(html: str) -> str:
 
 
 @tool
-def scrape_product_page(product_id: str) -> str:
+def scrape_product_pages(product_ids: list[str]) -> str:
     """
-    Scrape a hockey equipment product page and return structured product information
-    including name, brand, category, price, rating, and customer reviews.
-
-    Available product IDs:
-    - bauer_supreme_stick
-    - warrior_covert_stick
-    - ccm_tacks_skates
-    - bauer_reakt_helmet
-    - ccm_ht_gloves
-    - bauer_vapor_shin_pads
+    Scrape one or more hockey equipment product pages in a single call.
+    Always use list_products first to get valid product IDs.
+    Pass all relevant product IDs at once to minimize tool calls.
 
     Args:
-        product_id: The product identifier to scrape.
+        product_ids: List of product identifiers to scrape.
 
     Returns:
-        Markdown formatted product data.
+        Markdown formatted product data for each product, separated by dividers.
     """
-    logger.info("[TOOL] web_scraper called with product_id='%s'", product_id)
+    logger.info("[TOOL] scrape_product_pages called with %d product(s): %s", len(product_ids), product_ids)
 
-    if product_id not in AVAILABLE_PRODUCTS:
-        available = ", ".join(AVAILABLE_PRODUCTS.keys())
-        logger.warning("[TOOL] Unknown product_id='%s'", product_id)
-        return f"Unknown product ID '{product_id}'. Available products: {available}"
+    results = []
+    for product_id in product_ids:
+        if product_id not in AVAILABLE_PRODUCTS:
+            logger.warning("[TOOL] Unknown product_id='%s'", product_id)
+            results.append(
+                f"[TOOL ERROR] Unknown product ID '{product_id}'. "
+                f"No data was retrieved. Do not infer or guess product information."
+            )
+            continue
 
-    file_path = DATA_DIR / AVAILABLE_PRODUCTS[product_id]
+        file_path = DATA_DIR / AVAILABLE_PRODUCTS[product_id]
+        try:
+            html = file_path.read_text(encoding="utf-8")
+            results.append(parse_product_page(html))
+            logger.info("[TOOL] Successfully scraped '%s'", product_id)
+        except Exception as e:
+            logger.error("[TOOL] Failed to scrape '%s': %s", product_id, e)
+            results.append(
+                f"[TOOL ERROR] Failed to retrieve data for '{product_id}': {e}. "
+                f"No data was retrieved. Do not infer or guess product information."
+            )
 
-    try:
-        html = file_path.read_text(encoding="utf-8")
-        result = parse_product_page(html)
-        logger.info("[TOOL] Successfully scraped '%s'", product_id)
-        return result
-    except Exception as e:
-        logger.error("[TOOL] Failed to scrape '%s': %s", product_id, e)
-        return f"Error reading product page for '{product_id}': {e}"
+    return "\n\n---\n\n".join(results)
