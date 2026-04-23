@@ -1,7 +1,7 @@
 import logging
 from typing import Literal
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage, trim_messages
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import MessagesState
@@ -69,7 +69,20 @@ def build_agent():
 
     def call_llm(state: AgentState):
         logger.info("[AGENT] Calling LLM...")
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
+        trimmed = trim_messages(
+            state["messages"],
+            max_tokens=settings.max_context_tokens,
+            strategy="last",
+            token_counter=lambda msgs: sum(len(str(m.content)) // 4 for m in msgs),
+            allow_partial=False,
+        )
+        if len(trimmed) < len(state["messages"]):
+            logger.warning(
+                "[AGENT] Context trimmed: %d → %d messages",
+                len(state["messages"]),
+                len(trimmed),
+            )
+        messages = [SystemMessage(content=SYSTEM_PROMPT)] + trimmed
 
         analysis_done = has_called_tool(state["messages"], "analyze_sentiment")
         llm_to_use = llm_with_tools if analysis_done else llm_with_tools.bind(tool_choice="required")
