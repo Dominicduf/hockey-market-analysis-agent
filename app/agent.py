@@ -10,10 +10,11 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from app.config import settings
 from app.prompts import GUARDRAIL_PROMPT, SYSTEM_PROMPT
 from app.tools.list_products import list_products
+from app.tools.report_generator import generate_report
 from app.tools.sentiment_analyzer import analyze_sentiment
 from app.tools.web_scraper import scrape_product_pages
 
-tools = [list_products, scrape_product_pages, analyze_sentiment]
+tools = [list_products, scrape_product_pages, analyze_sentiment, generate_report]
 
 REFUSAL_MESSAGE = (
     "I'm a hockey equipment market analyst and I can only help with queries related "
@@ -86,7 +87,7 @@ def build_agent():
             )
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + trimmed
 
-        analysis_done = has_called_tool(state["messages"], "analyze_sentiment")
+        analysis_done = has_called_tool(state["messages"], "generate_report")
         llm_to_use = (
             llm_with_tools if analysis_done else llm_with_tools.bind(tool_choice="required")
         )

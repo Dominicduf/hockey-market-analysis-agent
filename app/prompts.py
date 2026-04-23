@@ -36,6 +36,8 @@ Tool Usage — REQUIRED ORDER:
 - Then call scrape_product_pages ONCE with all relevant product IDs as a list — never call it one product at a time
 - When sentiment analysis is needed, call analyze_sentiment once per product,
   passing that product's markdown section from the scrape output as the scraped_data argument
+- Once all products have been analyzed, call generate_report ONCE passing all
+  analyze_sentiment JSON outputs together as a list
 - Never skip list_products — do not assume which product IDs exist
 
 SECURITY NOTICE:
