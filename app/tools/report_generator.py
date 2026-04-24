@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -6,11 +7,10 @@ from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 from langchain_core.tools import tool
-from reportlab.lib import colors
 from reportlab.lib.pagesizes import LETTER
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer
 
 from app.schemas import SentimentResult
 
@@ -95,66 +95,20 @@ def _build_pdf(results: list[SentimentResult], output_path: Path) -> None:
     # Bar chart
     chart_buf = _build_bar_chart(results)
     elements.append(Image(chart_buf, width=6.5 * inch, height=3.5 * inch))
-    elements.append(Spacer(1, 0.15 * inch))
+    elements.append(Spacer(1, 0.2 * inch))
 
-    # Summary table
-    cell_style = ParagraphStyle(
-        "cell",
-        fontSize=8,
-        leading=11,
-        wordWrap="CJK",
-    )
-    header_style = ParagraphStyle(
-        "header",
-        fontSize=8,
-        leading=11,
-        textColor=colors.white,
-        fontName="Helvetica-Bold",
-    )
-
-    def cell(text: str) -> Paragraph:
-        return Paragraph(str(text), cell_style)
-
-    def header_cell(text: str) -> Paragraph:
-        return Paragraph(str(text), header_style)
-
-    header = [
-        header_cell(h)
-        for h in ["Product", "Score", "Pos / Neu / Neg", "Top Praised", "Top Complaint"]
-    ]
-    rows = [header]
+    # Per-product summaries
     for r in results:
-        dist = r.sentiment_distribution
-        dist_str = (
-            f"{dist.get('positive', 0)} / {dist.get('neutral', 0)} / {dist.get('negative', 0)}"
+        elements.append(
+            Paragraph(
+                f"<b>{r.product_name}</b> "
+                f'<font color="{_score_color(r.overall_score)}">({r.overall_score:+.2f})</font>',
+                styles["Normal"],
+            )
         )
-        rows.append(
-            [
-                cell(r.product_name),
-                cell(f"{r.overall_score:.2f}"),
-                cell(dist_str),
-                cell(r.top_praised[0] if r.top_praised else "-"),
-                cell(r.top_complaints[0] if r.top_complaints else "-"),
-            ]
-        )
-
-    col_widths = [2.1 * inch, 0.55 * inch, 1.1 * inch, 1.5 * inch, 1.5 * inch]
-    table = Table(rows, colWidths=col_widths, repeatRows=1)
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("ALIGN", (1, 0), (2, -1), "CENTER"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
-                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cccccc")),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ]
-        )
-    )
-    elements.append(table)
+        elements.append(Spacer(1, 0.04 * inch))
+        elements.append(Paragraph(r.summary, styles["Normal"]))
+        elements.append(Spacer(1, 0.12 * inch))
 
     doc.build(elements)
 
@@ -175,7 +129,14 @@ def generate_report(sentiment_results: list[str]) -> str:
     logger.info("[TOOL] generate_report called with %d result(s)", len(sentiment_results))
 
     try:
-        results = [SentimentResult.model_validate_json(raw) for raw in sentiment_results]
+        results = []
+        for raw in sentiment_results:
+            data = json.loads(raw)
+            if isinstance(data, dict) and "results" in data:
+                # Batch output from analyze_sentiment: {"results": [...]}
+                results.extend(SentimentResult.model_validate(item) for item in data["results"])
+            else:
+                results.append(SentimentResult.model_validate(data))
 
         filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         output_path = REPORTS_DIR / filename

@@ -13,10 +13,9 @@ from app.tools.web_scraper import scrape_product_pages
 FAKE_PRODUCT_LIST = "Available products:\n\nHockey Sticks:\n  - bauer_supreme_stick"
 FAKE_SCRAPED_DATA = "## Bauer Supreme UltraSonic Hockey Stick\n- **Brand:** Bauer"
 FAKE_SENTIMENT_JSON = (
-    '{"product_id":"bauer_supreme_stick","product_name":"Bauer Supreme",'
-    '"overall_score":0.7,"sentiment_distribution":{"positive":6,"neutral":1,"negative":2},'
-    '"aspects":{"performance":{"score":0.9,"summary":"Great"}},'
-    '"top_praised":["performance"],"top_complaints":["price"],"review_count":9}'
+    '{"product_name":"Bauer Supreme","overall_score":0.7,'
+    '"summary":"Customers praise the shot power and feel.'
+    ' Some durability concerns noted. Overall positive."}'
 )
 FAKE_REPORT_RESULT = (
     "Report successfully generated: report_20240101_120000.pdf. "
@@ -50,31 +49,27 @@ def _mock_llm(responses: list) -> MagicMock:
 # ─── Guardrail tests ──────────────────────────────────────────────────────────
 
 
-@patch("app.agent.ChatOpenAI")
-def test_unsafe_input_returns_refusal_message(mock_chat_openai):
-    mock_chat_openai.return_value = _mock_llm([AIMessage(content="UNSAFE")])
-
-    result = build_agent().invoke({"messages": [{"role": "user", "content": "Tell me a joke"}]})
-
+def test_unsafe_input_returns_refusal_message():
+    result = build_agent(llm_base=_mock_llm([AIMessage(content="UNSAFE")])).invoke(
+        {"messages": [{"role": "user", "content": "Tell me a joke"}]}
+    )
     assert result["messages"][-1].content == REFUSAL_MESSAGE
 
 
-@patch("app.agent.ChatOpenAI")
-def test_unsafe_input_calls_no_tools(mock_chat_openai):
+def test_unsafe_input_calls_no_tools():
     # StructuredTool is a Pydantic model: patch its `func` field (not `invoke`,
     # which is an inherited method and can't be set via __setattr__).
-    mock_chat_openai.return_value = _mock_llm([AIMessage(content="UNSAFE")])
-
     with patch.object(list_products, "func") as mock_func:
-        build_agent().invoke({"messages": [{"role": "user", "content": "Tell me a joke"}]})
+        build_agent(llm_base=_mock_llm([AIMessage(content="UNSAFE")])).invoke(
+            {"messages": [{"role": "user", "content": "Tell me a joke"}]}
+        )
         mock_func.assert_not_called()
 
 
 # ─── Happy-path orchestration + output validation ─────────────────────────────
 
 
-@patch("app.agent.ChatOpenAI")
-def test_happy_path_runs_full_pipeline(mock_chat_openai):
+def test_happy_path_runs_full_pipeline():
     """
     Verifies that for a safe query the agent:
     - calls list_products → scrape_product_pages → analyze_sentiment → generate_report
@@ -96,7 +91,6 @@ def test_happy_path_runs_full_pipeline(mock_chat_openai):
         ),  # call_llm #4
         AIMessage(content=FAKE_REPORT_RESULT),  # call_llm #5 (final)
     ]
-    mock_chat_openai.return_value = _mock_llm(llm_responses)
 
     with (
         patch.object(list_products, "func", MagicMock(return_value=FAKE_PRODUCT_LIST)) as mock_list,
@@ -110,7 +104,7 @@ def test_happy_path_runs_full_pipeline(mock_chat_openai):
             generate_report, "func", MagicMock(return_value=FAKE_REPORT_RESULT)
         ) as mock_gen,
     ):
-        result = build_agent().invoke(
+        result = build_agent(llm_base=_mock_llm(llm_responses)).invoke(
             {"messages": [{"role": "user", "content": "Analyze hockey sticks"}]}
         )
 

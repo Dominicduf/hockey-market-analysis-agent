@@ -1,4 +1,8 @@
-from pydantic import BaseModel
+from typing import Annotated
+
+from pydantic import BaseModel, Field
+
+ScoreFloat = Annotated[float, Field(ge=-1.0, le=1.0)]
 
 
 class QueryRequest(BaseModel):
@@ -9,19 +13,22 @@ class QueryResponse(BaseModel):
     response: str
 
 
-class AspectScore(BaseModel):
-    score: float  # -1.0 (very negative) to 1.0 (very positive)
-    summary: str  # one-line explanation
-
-
 class SentimentResult(BaseModel):
-    product_id: str
-    product_name: str
-    overall_score: float  # -1.0 to 1.0, for bar chart
-    sentiment_distribution: dict[
-        str, int
-    ]  # {"positive": n, "neutral": n, "negative": n}, for donut chart
-    aspects: dict[str, AspectScore]  # {"durability": AspectScore, ...}, for radar chart
-    top_praised: list[str]  # recurring positive themes
-    top_complaints: list[str]  # recurring negative themes
-    review_count: int
+    product_name: str = Field(description="The full product name as it appears in the product data")
+    overall_score: ScoreFloat = Field(
+        description=(
+            "Overall sentiment score from -1.0 (very negative) to 1.0 (very positive),"
+            " derived from the review ratings"
+        )
+    )
+    summary: str = Field(
+        description=(
+            "2-3 sentence summary of customer sentiment, grounded strictly in the review text"
+        )
+    )
+
+
+class SentimentResults(BaseModel):
+    results: list[SentimentResult] = Field(
+        description="Sentiment analysis results, one entry per product"
+    )

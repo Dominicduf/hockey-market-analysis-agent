@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from langchain_core.tools import tool
 
-from app.tools.web_scraper import PRODUCT_CATALOG
+from app.catalog import PRODUCT_CATALOG
 
 logger = logging.getLogger(__name__)
 

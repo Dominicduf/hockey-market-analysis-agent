@@ -21,9 +21,7 @@ def test_return_value_contains_filename_and_download_path(sample_sentiment_json,
 
 
 def test_multiple_results_produce_a_single_pdf(sample_sentiment_result, tmp_path):
-    second = sample_sentiment_result.model_copy(
-        update={"product_id": "warrior_covert_stick", "product_name": "Warrior Covert QRE 10"}
-    )
+    second = sample_sentiment_result.model_copy(update={"product_name": "Warrior Covert QRE 10"})
     with patch("app.tools.report_generator.REPORTS_DIR", tmp_path):
         generate_report.invoke(
             {
